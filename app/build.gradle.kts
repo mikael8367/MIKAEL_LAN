@@ -2,16 +2,16 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android { namespace = "com.mikael.lan"; compileSdk = 35
     defaultConfig { applicationId = "com.mikael.lan"; minSdk = 29; targetSdk = 35; versionCode = 1; versionName = "0.1.0" }
     buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
-kotlin { jvmToolchain(17) }
+kotlin { jvmToolchain(21) }
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
