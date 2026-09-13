@@ -40,6 +40,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun denyRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
     fun banPeer(peer: com.mikael.lan.data.Peer) { _banned.value = _banned.value + peer.id; _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
     fun removePeer(peer: com.mikael.lan.data.Peer) { _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
+    fun promotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Moderador") }
+    fun demotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Membro") }
+    private fun updateRole(peer: com.mikael.lan.data.Peer, role: String) { _network.value = _network.value?.copy(peers = _network.value!!.peers.map { if (it.id == peer.id) it.copy(role = role) else it }) }
     fun createNetwork(name: String, password: String) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "A senha deve ter pelo menos 4 caracteres." }
@@ -50,6 +53,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun joinNetwork(name: String, password: String) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "Informe a senha da rede." }
+        require((_network.value?.peers?.size ?: 0) < _settings.value.maxPlayers) { "A rede atingiu o limite de jogadores." }
         _network.value = LanNetwork(name.trim(), name.trim(), "senha verificada", "10.10.0.3", emptyList(), true)
         discoverWorlds()
         runDiagnostics()
