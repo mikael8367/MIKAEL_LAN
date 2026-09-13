@@ -15,13 +15,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val client = CoordinatorClient()
+    private val prefs = app.getSharedPreferences("mikaellan_networks", Application.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
     private val _network = MutableStateFlow<LanNetwork?>(null); val network: StateFlow<LanNetwork?> = _network.asStateFlow()
+    private val _savedNetworks = MutableStateFlow(loadSavedNetworks()); val savedNetworks: StateFlow<List<LanNetwork>> = _savedNetworks.asStateFlow()
     private val _diagnostics = MutableStateFlow<List<Diagnostic>>(emptyList()); val diagnostics = _diagnostics.asStateFlow()
     private val _worlds = MutableStateFlow<List<LanWorld>>(emptyList()); val worlds: StateFlow<List<LanWorld>> = _worlds.asStateFlow()
     fun loadDemo() { _network.value = client.localDemoNetwork(); runDiagnostics() }
+    private fun loadSavedNetworks(): List<LanNetwork> = prefs.getStringSet("names", emptySet()).orEmpty().map { LanNetwork(it, it, "salva neste aparelho", "10.10.0.2", emptyList(), false) }
+    fun saveCurrentNetwork() { _network.value?.let { current -> val updated = (_savedNetworks.value.filterNot { it.name == current.name } + current.copy(connected = false)); _savedNetworks.value = updated; prefs.edit().putStringSet("names", updated.map { it.name }.toSet()).apply() } }
+    fun disconnect() { _network.value = _network.value?.copy(connected = false) }
+    fun reconnect(saved: LanNetwork) { _network.value = saved.copy(connected = true); discoverWorlds(); runDiagnostics() }
     fun createNetwork(name: String, password: String) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "A senha deve ter pelo menos 4 caracteres." }
