@@ -25,6 +25,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val json = Json { ignoreUnknownKeys = true }
     private val _network = MutableStateFlow<LanNetwork?>(null); val network: StateFlow<LanNetwork?> = _network.asStateFlow()
     private val _savedNetworks = MutableStateFlow(loadSavedNetworks()); val savedNetworks: StateFlow<List<LanNetwork>> = _savedNetworks.asStateFlow()
+    private val _publicNetworks = MutableStateFlow<List<LanNetwork>>(listOf(LanNetwork("PUBLIC-DEMO", "Sala pública Minecraft", "entrada livre", "10.20.0.2", emptyList(), false))); val publicNetworks: StateFlow<List<LanNetwork>> = _publicNetworks.asStateFlow()
     private val _diagnostics = MutableStateFlow<List<Diagnostic>>(emptyList()); val diagnostics = _diagnostics.asStateFlow()
     private val _worlds = MutableStateFlow<List<LanWorld>>(emptyList()); val worlds: StateFlow<List<LanWorld>> = _worlds.asStateFlow()
     private val _settings = MutableStateFlow(NetworkSettings()); val settings: StateFlow<NetworkSettings> = _settings.asStateFlow()
@@ -36,6 +37,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun disconnect() { _network.value = _network.value?.copy(connected = false) }
     fun reconnect(saved: LanNetwork) { _network.value = saved.copy(connected = true); discoverWorlds(); runDiagnostics() }
     fun updateSettings(settings: NetworkSettings) { _settings.value = settings }
+    fun publishCurrentNetwork() {
+        val current = _network.value ?: return
+        require(_publicNetworks.value.size < 3 || _publicNetworks.value.any { it.name == current.name }) { "Você já atingiu o limite de 3 redes públicas." }
+        _settings.value = _settings.value.copy(isPublic = true)
+        _publicNetworks.value = (_publicNetworks.value.filterNot { it.name == current.name } + current.copy(connected = false)).take(3)
+    }
+    fun unpublishCurrentNetwork() { _network.value?.let { current -> _settings.value = _settings.value.copy(isPublic = false); _publicNetworks.value = _publicNetworks.value.filterNot { it.name == current.name } } }
     fun approveRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
     fun denyRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
     fun banPeer(peer: com.mikael.lan.data.Peer) { _banned.value = _banned.value + peer.id; _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
