@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.mikael.lan.data.Diagnostic
 import com.mikael.lan.data.LanNetwork
 import com.mikael.lan.data.LanWorld
+import com.mikael.lan.data.JoinRequest
+import com.mikael.lan.data.NetworkSettings
 import com.mikael.lan.data.Status
 import com.mikael.lan.network.CoordinatorClient
 import com.mikael.lan.service.MikaelVpnService
@@ -25,11 +27,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _savedNetworks = MutableStateFlow(loadSavedNetworks()); val savedNetworks: StateFlow<List<LanNetwork>> = _savedNetworks.asStateFlow()
     private val _diagnostics = MutableStateFlow<List<Diagnostic>>(emptyList()); val diagnostics = _diagnostics.asStateFlow()
     private val _worlds = MutableStateFlow<List<LanWorld>>(emptyList()); val worlds: StateFlow<List<LanWorld>> = _worlds.asStateFlow()
+    private val _settings = MutableStateFlow(NetworkSettings()); val settings: StateFlow<NetworkSettings> = _settings.asStateFlow()
+    private val _joinRequests = MutableStateFlow(listOf(JoinRequest("req-demo", "Novo jogador", "device-demo"))); val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
+    private val _banned = MutableStateFlow<Set<String>>(emptySet()); val banned: StateFlow<Set<String>> = _banned.asStateFlow()
     fun loadDemo() { _network.value = client.localDemoNetwork(); discoverWorlds(); runDiagnostics() }
     private fun loadSavedNetworks(): List<LanNetwork> = prefs.getStringSet("names", emptySet()).orEmpty().map { LanNetwork(it, it, "salva neste aparelho", "10.10.0.2", emptyList(), false) }
     fun saveCurrentNetwork() { _network.value?.let { current -> val updated = (_savedNetworks.value.filterNot { it.name == current.name } + current.copy(connected = false)); _savedNetworks.value = updated; prefs.edit().putStringSet("names", updated.map { it.name }.toSet()).apply() } }
     fun disconnect() { _network.value = _network.value?.copy(connected = false) }
     fun reconnect(saved: LanNetwork) { _network.value = saved.copy(connected = true); discoverWorlds(); runDiagnostics() }
+    fun updateSettings(settings: NetworkSettings) { _settings.value = settings }
+    fun approveRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
+    fun denyRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
+    fun banPeer(peer: com.mikael.lan.data.Peer) { _banned.value = _banned.value + peer.id; _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
+    fun removePeer(peer: com.mikael.lan.data.Peer) { _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
     fun createNetwork(name: String, password: String) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "A senha deve ter pelo menos 4 caracteres." }
