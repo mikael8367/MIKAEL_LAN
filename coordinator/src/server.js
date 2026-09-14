@@ -7,8 +7,10 @@ const sessions = new Map();
 const relayEndpoints = new Map();
 const relayPort = Number(process.env.RELAY_PORT || 3478);
 const httpPort = Number(process.env.PORT || 8080);
+const SESSION_TTL_MS = 60 * 60 * 1000;
+const MAX_BODY_BYTES = 16 * 1024;
 const json = (res, status, body) => { res.writeHead(status, {'content-type':'application/json'}); res.end(JSON.stringify(body)); };
-const read = req => new Promise((resolve, reject) => { let b=''; req.on('data', c => b += c); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}) } catch(e) { reject(e) } }); });
+const read = req => new Promise((resolve, reject) => { let b='', size=0; req.on('data', c => { size += c.length; if (size > MAX_BODY_BYTES) { reject(new Error('body_too_large')); req.destroy(); } else b += c; }); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}) } catch(e) { reject(e) } }); });
 const random = bytes => crypto.randomBytes(bytes).toString('hex');
 const networkId = () => random(4).toUpperCase();
 const passHash = password => crypto.createHash('sha256').update(String(password || '')).digest('hex');
@@ -17,9 +19,11 @@ const peers = net => [...net.peers.values()].map(p => ({...p}));
 function registerPeer(net, body) {
   const deviceId = String(body.deviceId || random(8));
   const peer = { id: deviceId, name: String(body.name || 'Jogador').slice(0, 40), virtualIp: `10.10.0.${Math.min(250, net.peers.size + 2)}`, pingMs: null, connected: true, transport: 'RELAY', role: 'Membro' };
-  const token = random(24); net.peers.set(deviceId, peer); sessions.set(token, { networkId: net.id, deviceId });
+  for (const [oldToken, session] of sessions) if (session.networkId === net.id && session.deviceId === deviceId) sessions.delete(oldToken);
+  const token = random(24); net.peers.set(deviceId, peer); sessions.set(token, { networkId: net.id, deviceId, expiresAt: Date.now() + SESSION_TTL_MS });
   return { token, peer };
 }
+const getSession = token => { const session = sessions.get(token); if (!session || session.expiresAt < Date.now()) { if (session) sessions.delete(token); return null; } return session; };
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -38,11 +42,11 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, {networkId: net.id, name: net.name, secretHint:'••••••••', token: result.token, virtualIp: result.peer.virtualIp, peers: peers(net), relay:{host:process.env.RELAY_HOST || req.headers.host?.split(':')[0] || '127.0.0.1', port:relayPort}, connected:true});
       }
       if (req.method === 'GET' && match[2] === 'peers') {
-        const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); if (!sessions.has(auth) || sessions.get(auth).networkId !== net.id) return json(res, 401, {error:'unauthorized'});
+        const auth = String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); const session = getSession(auth); if (!session || session.networkId !== net.id) return json(res, 401, {error:'unauthorized'});
         return json(res, 200, {id:net.id, name:net.name, secretHint:'••••••••', peers:peers(net), connected:true});
       }
       if (req.method === 'POST' && match[2] === 'leave') {
-        const b = await read(req); const session = sessions.get(b.token); if (session?.networkId === net.id) { net.peers.delete(session.deviceId); sessions.delete(b.token); }
+        const b = await read(req); const session = getSession(b.token); if (session?.networkId === net.id) { net.peers.delete(session.deviceId); sessions.delete(b.token); relayEndpoints.delete(`${net.id}:${session.deviceId}`); }
         return json(res, 200, {ok:true});
       }
     }
@@ -58,7 +62,7 @@ relay.on('message', (message, remote) => {
   if (offset + tokenLen + 2 > message.length) return; const token = message.subarray(offset, offset + tokenLen).toString(); offset += tokenLen;
   const deviceLen = message.readUInt16BE(offset); offset += 2; if (offset + deviceLen > message.length) return;
   const device = message.subarray(offset, offset + deviceLen).toString(); offset += deviceLen;
-  const session = sessions.get(token); if (!session || session.deviceId !== device) return;
+  const session = getSession(token); if (!session || session.deviceId !== device || message.length > 32767) return;
   const net = networks.get(session.networkId); if (!net) return;
   relayEndpoints.set(`${session.networkId}:${device}`, { address: remote.address, port: remote.port });
   for (const [peerId] of net.peers) if (peerId !== device) {

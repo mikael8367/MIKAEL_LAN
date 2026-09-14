@@ -3,6 +3,10 @@ package com.mikael.lan.service
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +35,7 @@ class MikaelVpnService : VpnService() {
         val relayPort = intent.getIntExtra(EXTRA_RELAY_PORT, 3478)
         val token = intent.getStringExtra(EXTRA_TOKEN) ?: return
         val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID) ?: return
+        startForegroundNotification()
         tunnel = Builder().setSession("MikaelLAN")
             .addAddress(virtualIp, 24).addRoute("10.10.0.0", 24).setBlocking(false).establish()
         val fd = tunnel ?: return
@@ -48,7 +53,15 @@ class MikaelVpnService : VpnService() {
         }
     }
 
+    private fun startForegroundNotification() {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(CHANNEL, "MikaelLAN VPN", NotificationManager.IMPORTANCE_LOW))
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
+        val notification = builder.setContentTitle("MikaelLAN conectado").setContentText("Rede LAN virtual ativa").setSmallIcon(android.R.drawable.stat_sys_warning).setOngoing(true).build()
+        startForeground(NOTIFICATION_ID, notification)
+    }
+
     private fun stopVpn() { scope?.cancel(); scope = null; socket?.close(); socket = null; tunnel?.close(); tunnel = null; stopSelf() }
     override fun onDestroy() { stopVpn(); super.onDestroy() }
-    companion object { const val ACTION_STOP = "com.mikael.lan.STOP_VPN"; const val EXTRA_VIRTUAL_IP = "virtual_ip"; const val EXTRA_RELAY_HOST = "relay_host"; const val EXTRA_RELAY_PORT = "relay_port"; const val EXTRA_TOKEN = "token"; const val EXTRA_DEVICE_ID = "device_id" }
+    companion object { const val ACTION_STOP = "com.mikael.lan.STOP_VPN"; const val EXTRA_VIRTUAL_IP = "virtual_ip"; const val EXTRA_RELAY_HOST = "relay_host"; const val EXTRA_RELAY_PORT = "relay_port"; const val EXTRA_TOKEN = "token"; const val EXTRA_DEVICE_ID = "device_id"; private const val CHANNEL = "mikaellan_vpn"; private const val NOTIFICATION_ID = 7021 }
 }

@@ -32,8 +32,8 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(18.dp))
             when (screen) {
                 "home" -> Home(network?.name, network?.peers?.size ?: 0, { screen = "create" }, { screen = "join" }, { screen = "saved" }, { screen = "public" }, { screen = "diagnostics" })
-                "create" -> Create({ name, pass -> runCatching { vm.createNetwork(name, pass) }.onSuccess { screen = "network" } }, { screen = "home" })
-                "join" -> Join({ name, pass -> runCatching { vm.joinNetwork(name, pass) }.onSuccess { screen = "network" } }, { screen = "home" })
+                "create" -> Create({ name, pass -> runCatching { vm.createNetwork(name, pass) { screen = "network" } } }, { screen = "home" })
+                "join" -> Join({ name, pass -> runCatching { vm.joinNetwork(name, pass) { screen = "network" } } }, { screen = "home" })
                 "network" -> NetworkScreen(network, worlds, vm, { screen = "home" }, { screen = "diagnostics" }, { screen = "settings" }, { screen = "games" })
                 "settings" -> NetworkSettingsScreen(settings, requests, vm, { screen = "network" })
                 "games" -> GamesScreen(profiles, vm, { screen = "network" })

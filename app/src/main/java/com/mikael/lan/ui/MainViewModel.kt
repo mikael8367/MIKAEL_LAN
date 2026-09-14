@@ -60,20 +60,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun promotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Moderador") }
     fun demotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Membro") }
     private fun updateRole(peer: com.mikael.lan.data.Peer, role: String) { _network.value = _network.value?.copy(peers = _network.value!!.peers.map { if (it.id == peer.id) it.copy(role = role) else it }) }
-    fun createNetwork(name: String, password: String) {
+    fun createNetwork(name: String, password: String, onConnected: () -> Unit = {}) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "A senha deve ter pelo menos 4 caracteres." }
-        _network.value = LanNetwork("MK-${(1000..9999).random()}", name.trim(), "senha configurada", "10.10.0.2", emptyList(), true)
-        discoverWorlds()
-        runDiagnostics()
+        viewModelScope.launch { client.createNetwork(name.trim(), password).onSuccess { remote -> _network.value = remote.copy(connected = true); discoverWorlds(); runDiagnostics(); onConnected() } }
     }
-    fun joinNetwork(name: String, password: String) {
+    fun joinNetwork(name: String, password: String, onConnected: () -> Unit = {}) {
         require(name.trim().isNotEmpty()) { "Informe o nome da rede." }
         require(password.length >= 4) { "Informe a senha da rede." }
         require((_network.value?.peers?.size ?: 0) < _settings.value.maxPlayers) { "A rede atingiu o limite de jogadores." }
-        _network.value = LanNetwork(name.trim(), name.trim(), "senha verificada", "10.10.0.3", emptyList(), true)
-        discoverWorlds()
-        runDiagnostics()
+        viewModelScope.launch { client.joinNetwork(name.trim(), password).onSuccess { remote -> _network.value = remote.copy(connected = true); discoverWorlds(); runDiagnostics(); onConnected() } }
     }
     fun prepareVpn(): Intent? = _network.value?.let { VpnService.prepare(getApplication()) }
     fun startVpn() { _network.value?.let { net -> val intent = Intent(getApplication(), MikaelVpnService::class.java).apply { putExtra(MikaelVpnService.EXTRA_VIRTUAL_IP, net.virtualIp); putExtra(MikaelVpnService.EXTRA_RELAY_HOST, net.relayHost); putExtra(MikaelVpnService.EXTRA_RELAY_PORT, net.relayPort); putExtra(MikaelVpnService.EXTRA_TOKEN, net.sessionToken); putExtra(MikaelVpnService.EXTRA_DEVICE_ID, net.deviceId) }; getApplication<Application>().startService(intent) } }
