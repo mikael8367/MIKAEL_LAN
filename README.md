@@ -33,11 +33,13 @@ cd coordinator
 npm start
 ```
 
+O coordenador agora expõe HTTP para autenticação/sinalização e UDP para relay de pacotes. Em um servidor público, defina `PORT`, `RELAY_PORT` e `RELAY_HOST`, libere as portas TCP/UDP no firewall e configure o endereço HTTPS desse serviço no `CoordinatorClient` do aplicativo. O APK compilado nesta sessão ainda mantém o domínio placeholder `mikaellan-coordinator.example.com`; portanto, ele não consegue conectar dois celulares pela Internet até que o coordenador seja publicado e esse endereço seja alterado.
+
 Para produção, coloque HTTPS na frente do serviço, use armazenamento persistente apropriado, tokens com expiração, rate limiting, logs mínimos e um relay separado. O endereço padrão no cliente é um placeholder; altere `CoordinatorClient` para o domínio publicado.
 
 ## Próximos incrementos necessários
 
-1. Implementar transporte UDP criptografado entre peers e copiar pacotes TUN para o peer correto.
+1. Adicionar TLS/DTLS ou criptografia autenticada ao relay UDP; o relay atual valida sessão, mas não substitui criptografia ponta a ponta.
 2. Integrar STUN e hole punching; marcar `transport` como `P2P` ou `RELAY` conforme o caminho.
 3. Criar relay opcional com limites e autenticação.
 4. Implementar descoberta multicast/broadcast de Minecraft quando suportada e descoberta alternativa por lista.

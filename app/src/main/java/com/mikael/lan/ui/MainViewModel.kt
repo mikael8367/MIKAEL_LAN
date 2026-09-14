@@ -76,7 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         runDiagnostics()
     }
     fun prepareVpn(): Intent? = _network.value?.let { VpnService.prepare(getApplication()) }
-    fun startVpn() { getApplication<Application>().startService(Intent(getApplication(), MikaelVpnService::class.java)) }
+    fun startVpn() { _network.value?.let { net -> val intent = Intent(getApplication(), MikaelVpnService::class.java).apply { putExtra(MikaelVpnService.EXTRA_VIRTUAL_IP, net.virtualIp); putExtra(MikaelVpnService.EXTRA_RELAY_HOST, net.relayHost); putExtra(MikaelVpnService.EXTRA_RELAY_PORT, net.relayPort); putExtra(MikaelVpnService.EXTRA_TOKEN, net.sessionToken); putExtra(MikaelVpnService.EXTRA_DEVICE_ID, net.deviceId) }; getApplication<Application>().startService(intent) } }
     fun discoverWorlds() {
         val current = _network.value
         val host = current?.peers?.firstOrNull { it.virtualIp != current.virtualIp }

@@ -1,0 +1,15 @@
+import dgram from 'node:dgram';
+const base = process.argv[2] || 'http://127.0.0.1:18080'; const relayPort = Number(process.argv[3] || 13478);
+const create = await (await fetch(`${base}/v1/networks`, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({name:'RelayTest',password:'secret123',deviceId:'host-1'})})).json();
+const join = await (await fetch(`${base}/v1/networks/RelayTest/join`, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({name:'Guest',password:'secret123',deviceId:'guest-1'})})).json();
+const frame = (token, device, payload) => { const a=Buffer.from(token), b=Buffer.from(device), p=Buffer.from(payload); const out=Buffer.alloc(8+a.length+b.length+p.length); let o=0; Buffer.from('MKL1').copy(out,o); o+=4; out.writeUInt16BE(a.length,o); o+=2; a.copy(out,o); o+=a.length; out.writeUInt16BE(b.length,o); o+=2; b.copy(out,o); o+=b.length; p.copy(out,o); return out; };
+const open = () => new Promise(resolve => { const s=dgram.createSocket('udp4'); s.bind(0, '127.0.0.1', () => resolve(s)); });
+const send = (s, data) => new Promise((resolve, reject) => s.send(data, relayPort, '127.0.0.1', e => e ? reject(e) : resolve()));
+const receiveMatching = (s, text) => new Promise((resolve, reject) => { const timer=setTimeout(() => { s.close(); reject(new Error('relay timeout')); }, 1500); const onMessage=m=>{ if(m.toString().includes(text)){ clearTimeout(timer); s.off('message', onMessage); resolve(m); } }; s.on('message', onMessage); });
+const host=await open(), guest=await open();
+await send(host, frame(create.token, 'host-1', 'register-host')); await send(guest, frame(join.token, 'guest-1', 'register-guest'));
+const guestWait=receiveMatching(guest, 'hello-host'), hostWait=receiveMatching(host, 'hello-guest');
+await send(host, frame(create.token, 'host-1', 'hello-host')); await send(guest, frame(join.token, 'guest-1', 'hello-guest'));
+const guestMessage=await guestWait, hostMessage=await hostWait;
+if (!guestMessage.toString().includes('hello-host') || !hostMessage.toString().includes('hello-guest')) throw new Error('relay payload mismatch');
+console.log('relay_bidirectional=PASS'); host.close(); guest.close();
