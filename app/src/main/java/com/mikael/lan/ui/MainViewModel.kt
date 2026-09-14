@@ -10,6 +10,9 @@ import com.mikael.lan.data.LanNetwork
 import com.mikael.lan.data.LanWorld
 import com.mikael.lan.data.JoinRequest
 import com.mikael.lan.data.NetworkSettings
+import com.mikael.lan.data.LanGameProfile
+import com.mikael.lan.data.PortRule
+import com.mikael.lan.data.TransportProtocol
 import com.mikael.lan.data.Status
 import com.mikael.lan.network.CoordinatorClient
 import com.mikael.lan.service.MikaelVpnService
@@ -31,6 +34,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _settings = MutableStateFlow(NetworkSettings()); val settings: StateFlow<NetworkSettings> = _settings.asStateFlow()
     private val _joinRequests = MutableStateFlow(listOf(JoinRequest("req-demo", "Novo jogador", "device-demo"))); val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
     private val _banned = MutableStateFlow<Set<String>>(emptySet()); val banned: StateFlow<Set<String>> = _banned.asStateFlow()
+    private val _gameProfiles = MutableStateFlow(listOf(
+        LanGameProfile("minecraft-java", "Minecraft Java", listOf(PortRule(25565, protocol = TransportProtocol.TCP, description = "Servidor/LAN"))),
+        LanGameProfile("generic-tcp-udp", "Jogo LAN personalizado", listOf(PortRule(10000, 65535, TransportProtocol.TCP_UDP, "Faixa configurável")), false)
+    )); val gameProfiles: StateFlow<List<LanGameProfile>> = _gameProfiles.asStateFlow()
     fun loadDemo() { _network.value = client.localDemoNetwork(); discoverWorlds(); runDiagnostics() }
     private fun loadSavedNetworks(): List<LanNetwork> = prefs.getStringSet("names", emptySet()).orEmpty().map { LanNetwork(it, it, "salva neste aparelho", "10.10.0.2", emptyList(), false) }
     fun saveCurrentNetwork() { _network.value?.let { current -> val updated = (_savedNetworks.value.filterNot { it.name == current.name } + current.copy(connected = false)); _savedNetworks.value = updated; prefs.edit().putStringSet("names", updated.map { it.name }.toSet()).apply() } }
@@ -48,6 +55,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun denyRequest(request: JoinRequest) { _joinRequests.value = _joinRequests.value - request }
     fun banPeer(peer: com.mikael.lan.data.Peer) { _banned.value = _banned.value + peer.id; _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
     fun removePeer(peer: com.mikael.lan.data.Peer) { _network.value = _network.value?.copy(peers = _network.value!!.peers.filterNot { it.id == peer.id }) }
+    fun addGameProfile(name: String, port: Int, protocol: TransportProtocol) { require(name.isNotBlank()); require(port in 1..65535); _gameProfiles.value = _gameProfiles.value + LanGameProfile("custom-${System.currentTimeMillis()}", name.trim(), listOf(PortRule(port, protocol = protocol, description = "Regra personalizada")), false) }
+    fun removeGameProfile(profile: LanGameProfile) { if (profile.id.startsWith("custom-")) _gameProfiles.value = _gameProfiles.value - profile }
     fun promotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Moderador") }
     fun demotePeer(peer: com.mikael.lan.data.Peer) { updateRole(peer, "Membro") }
     private fun updateRole(peer: com.mikael.lan.data.Peer, role: String) { _network.value = _network.value?.copy(peers = _network.value!!.peers.map { if (it.id == peer.id) it.copy(role = role) else it }) }
